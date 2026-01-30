@@ -1,17 +1,21 @@
 "use client";
 
-import React from "react"
-
+import React from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Activity, Bell, Settings, Zap } from "lucide-react";
+import { Activity, Bell, Settings } from "lucide-react";
 
 export function Header() {
   return (
     <header className="flex items-center justify-between border-b border-border bg-card px-6 py-4">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-          <Zap className="h-5 w-5 text-primary-foreground" />
-        </div>
+        <Image 
+          src="/clawcord-logo.png" 
+          alt="ClawCord Logo" 
+          width={44} 
+          height={44}
+          className="h-11 w-auto"
+        />
         <div>
           <h1 className="text-lg font-semibold text-foreground">ClawCord</h1>
           <p className="text-xs text-muted-foreground">Signal Caller Dashboard</p>
