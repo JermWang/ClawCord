@@ -77,8 +77,11 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  /* Updated font variables - body text now uses Figtree */
+  --font-sans: var(--font-figtree), "Figtree", "Figtree Fallback", system-ui, sans-serif;
+  --font-figtree: var(--font-figtree), "Figtree", "Figtree Fallback", system-ui, sans-serif;
+  /* Update font-mono to use Geist Mono variable */
+  --font-mono: var(--font-geist-mono), "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-background: var(--background);
@@ -124,6 +127,8 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    /* Set body text to Figtree 18px */
+    @apply bg-background text-foreground text-lg;
+    font-family: var(--font-figtree), "Figtree", "Figtree Fallback", system-ui, sans-serif;
   }
 }
