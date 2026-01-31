@@ -8,11 +8,25 @@ import { CallLogsTable } from "@/components/clawcord/call-logs-table";
 import { ServersSidebar } from "@/components/clawcord/servers-sidebar";
 import { PolicyPresets } from "@/components/clawcord/policy-presets";
 import { LiveCallDemo } from "@/components/clawcord/live-call-demo";
+import { AsciiShader } from "@/components/ascii-shader";
 
 export default function ClawCordDashboard() {
   return (
-    <div className="flex min-h-screen flex-col bg-[#fafafa]">
-      <Header />
+    <div className="flex min-h-screen flex-col bg-[#fafafa] relative">
+      {/* ASCII Shader Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <AsciiShader
+          mode="plasma"
+          color="#f8a5a5"
+          bgColor="#fff8f8"
+          density={1.3}
+          speed={0.5}
+          charRamp=" .:-=+*#%@"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-white/70 via-white/50 to-white/80" />
+      </div>
+      <div className="relative z-10 flex min-h-screen flex-col">
+        <Header />
 
       {/* Main Content */}
       <main className="flex-1 pt-28 pb-16">
@@ -186,6 +200,7 @@ export default function ClawCordDashboard() {
           </motion.div>
         </div>
       </footer>
+      </div>
     </div>
   );
 }

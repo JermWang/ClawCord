@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Activity, Bell, Settings, Menu, X } from "lucide-react";
+import { Activity, Bell, Settings, Menu, X, Plus } from "lucide-react";
 
 const navigationLinks = [
   { name: "Overview", href: "#overview", active: true },
@@ -99,8 +99,18 @@ export function Header() {
               <Settings className="h-4 w-4" />
             </Button>
             <a
+              href="/api/discord/invite"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-2 flex items-center gap-2 bg-[#5865F2] text-white px-[18px] py-[12px] rounded-full text-sm font-medium hover:bg-[#4752C4] transition-all duration-200"
+              style={{ fontFamily: "var(--font-figtree), Figtree", fontWeight: "500" }}
+            >
+              <Plus className="h-4 w-4" />
+              Add to Discord
+            </a>
+            <a
               href="#dashboard"
-              className="ml-2 bg-primary text-primary-foreground px-[18px] py-[12px] rounded-full text-sm font-medium hover:opacity-90 transition-all duration-200 hover:rounded-2xl"
+              className="bg-primary text-primary-foreground px-[18px] py-[12px] rounded-full text-sm font-medium hover:opacity-90 transition-all duration-200 hover:rounded-2xl"
               style={{ fontFamily: "var(--font-figtree), Figtree", fontWeight: "500" }}
             >
               Open Dashboard

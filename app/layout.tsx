@@ -26,21 +26,19 @@ export const metadata: Metadata = {
   description: 'Policy-driven signal caller for Solana tokens. Automate your Discord calls with configurable policies and real-time data.',
   generator: 'v0.app',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/ClawCord-logo.png',
+    apple: '/ClawCord-logo.png',
+  },
+  openGraph: {
+    title: 'ClawCord - Signal Caller Dashboard',
+    description: 'Policy-driven signal caller for Solana tokens. Automate your Discord calls with configurable policies and real-time data.',
+    images: ['/clawcord-banner-v2.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ClawCord - Signal Caller Dashboard',
+    description: 'Policy-driven signal caller for Solana tokens.',
+    images: ['/clawcord-banner-v2.png'],
   },
 }
 

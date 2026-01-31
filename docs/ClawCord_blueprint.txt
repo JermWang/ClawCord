@@ -1,0 +1,177 @@
+Got it. **ClawCord** can basically be a “bring-your-own-signal-agent” layer on top of OpenClaw that drops into Discord trench servers and produces *policy-driven* calls for Solana tokens—without pretending to be omniscient, and without being a security nightmare.
+
+Below is a concrete, buildable blueprint that matches how OpenClaw’s Discord channel works (bot token, mention policy, per-channel sessions, etc.). ([openclaw.ai](https://openclaw.ai/integrations))
+
+---
+
+## What ClawCord is (product definition)
+
+**ClawCord = “Signal Caller as a Policy Engine”**
+- Users/admins add a bot to their Discord server.
+- They choose a **Signal Policy** (preferences + guardrails + data sources + thresholds).
+- The agent:
+  - watches specified channels / messages / links / tickers,
+  - optionally polls whitelisted data feeds on a cadence,
+  - emits **standardized “call cards”** (entry thesis + risk flags + invalidation + liquidity/holders/volume/age + confidence + why-now),
+  - and keeps an auditable log of *why* it said what it said.
+
+**Key framing:** you’re not selling “alpha.” You’re selling **automation + consistency + configurable taste** (“ultimate signal caller”) and the **control plane** that makes it safe and non-ruggy.
+
+---
+
+## Non-negotiables (so this doesn’t get you cooked)
+
+### 1) Don’t allow “free-form financial advice”
+Your UX should force “call outputs” into a structured template:
+- **What it is:** token + market context
+- **Why it’s interesting:** objective triggers that fired
+- **Risks:** objective red flags
+- **What would invalidate:** conditions that would make the thesis wrong
+- **Confidence:** bounded + explainable (not vibes)
+
+This keeps it useful *and* reduces “guarantee/insider” vibes.
+
+### 2) Hard safety rails on Discord
+OpenClaw’s Discord integration already supports secure defaults like **DM pairing** and allowlists, and isolates sessions by guild channel IDs. Lean into that.
+
+Practical defaults you want:
+- **requireMention=true** in shared channels (only respond when @mentioned)
+- per-channel allowlists for who can run config commands
+- disable bot-to-bot loops
+- explicit opt-in for “autopost calls on schedule”
+
+### 3) Observability + receipts
+Every call should have:
+- a deterministic **call_id**
+- inputs (data snapshots / message link refs)
+- rules triggered
+- versioned policy hash
+- model + prompt version
+- who changed config + when
+
+---
+
+## MVP scope that ships fast (and feels “ultimate”)
+
+### A) Discord-first integration (weekend build)
+
+**MVP features**
+1. `/clawcord install` – posts setup checklist + permissions check
+2. `/clawcord policy set` – choose preset (see below)
+3. `/clawcord watch add` – add sources:
+   - token addresses
+   - tickers (resolved to mint)
+   - wallet(s) / deployer(s)
+   - twitter handles / links (optional later)
+4. `/clawcord call now <token>` – generates a call card on demand
+5. `/clawcord autopost on|off` – cadence + quiet hours + max/day
+6. `/clawcord thresholds` – sliders (min liq, min vol, max age, etc.)
+7. `/clawcord logs` – last 20 calls + reasoning summary + link to “receipts”
+
+### B) “Policy Packs” (what makes it feel premium)
+Offer 5–8 built-in policies that reflect real trench preferences:
+
+- **Fresh Scanner (0–2h)**: ultra-new launches, strict rug filters, low post rate
+- **Momentum (2h–48h)**: volume acceleration + social velocity + chart structure
+- **Dip Hunter**: drawdown + reclaim conditions + liquidity stability
+- **Whale Follow**: wallet-cluster watchlist + accumulation patterns
+- **Deployer Reputation**: deployer history + prior rugs/abandoned charts flags
+- **Community Strength**: holder growth, retention, distribution, chatter quality
+
+Each policy is just a named set of thresholds + enabled signals.
+
+---
+
+## Technical architecture (clean + shippable)
+
+### 1) Base: OpenClaw Gateway + Discord channel
+- You run OpenClaw locally or on a small VM.
+- Configure Discord bot token and guild/channel rules.
+- OpenClaw already isolates guild channel sessions which is perfect for per-server configuration separation.
+
+### 2) ClawCord as an OpenClaw “skill”
+OpenClaw is designed around “skills” and community integrations via ClawHub.
+
+Your skill provides:
+- **commands**: parse slash commands + config writes (optionally)
+- **data fetchers**: Solana RPC / indexers / pricing endpoints
+- **scoring engine**: turns raw metrics → normalized scores
+- **renderer**: outputs “call cards” with consistent formatting
+- **storage**: per-guild policy + watchlists + logs
+
+### 3) Data layer (pragmatic)
+You’ll want 3 categories of signals:
+
+**On-chain / market**
+- price/volume/liquidity
+- holders count, concentration, top holders delta
+- token age, mint authority/freeze authority
+- dev wallet actions, LP changes, supply changes
+
+**Social / attention (optional in v1)**
+- twitter mentions velocity for ticker/mint links
+- discord message spikes in watched channels
+
+**Heuristics**
+- “bundle-ish” distributions, suspicious holder graphs
+- deployer reuse patterns
+- abnormal LP behavior
+
+### 4) Control plane UI (v1 can be Discord-only)
+Discord-only is fine initially, but the SaaS moment is a web dashboard:
+- server list
+- policy editor
+- logs + backtests
+- billing + seat-based access
+
+---
+
+## Monetization that matches trench reality
+
+**Two-sided model works best:**
+1) **Server SaaS**: monthly per Discord server
+2) **Pro Policies**: paid policy packs + private policy import
+3) **White-label** for token communities
+4) **Enterprise**: internal comms automation
+
+Avoid charging per call; charge for **control + reliability**.
+
+---
+
+## “Ultimate signal caller” without being corny: output format
+
+Every call message should look like:
+
+- **$TOKEN** (mint) — *Policy: Momentum v2*
+- **Trigger(s):** vol +180%/30m, liq stable, holders +9%/2h
+- **Pros:** X, Y, Z
+- **Risks:** top-10 concentration high, LP young, deployer unknown
+- **Invalidation:** breaks below VWAP + volume dies
+- **Confidence:** 6.5/10
+- **Receipts:** links/snapshots
+
+---
+
+## Build prompt you can paste into your dev agent
+
+You are building “ClawCord”, a Discord-integrated signal-caller product implemented as an OpenClaw skill.
+
+Constraints:
+- Must use OpenClaw’s Discord channel integration patterns.
+- Must NOT provide unstructured financial advice.
+- Must be secure by default.
+
+Deliverables:
+1) Repo structure for an OpenClaw skill named clawcord
+2) Implement Discord slash commands
+3) Policy system with presets
+4) Data provider interfaces with stubs
+5) Storage for per-guild config + logs
+6) Structured Call Card output
+
+Also produce:
+- a threat model,
+- a deployment guide,
+- and a no-hallucinations rule.
+
+Proceed step-by-step and generate production-grade TypeScript.

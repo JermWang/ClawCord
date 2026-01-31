@@ -49,6 +49,30 @@ export {
   type Storage,
 } from "./storage";
 
+// DexScreener & PumpFun Graduations
+export {
+  DexScreenerProvider,
+  GraduationWatcher,
+  DEFAULT_GRADUATION_FILTER,
+} from "./dexscreener-provider";
+
+// Autopost Service
+export {
+  AutopostService,
+  getAutopostService,
+} from "./autopost-service";
+
+// Discord OAuth
+export {
+  generateBotInviteUrl,
+  generateOAuthUrl,
+  registerSlashCommands,
+  getGuildInfo,
+  getGuildChannels,
+  BOT_PERMISSIONS,
+  calculatePermissions,
+} from "./discord-oauth";
+
 /**
  * ClawCord Product Overview
  * 
