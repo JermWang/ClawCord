@@ -11,6 +11,50 @@ const DEFAULT_AUTOPOST_CONFIG = {
     intervalMs: 60_000, // 1 minute
     minScore: 6.5,
 };
+const SOCIAL_PRIORITY = ["twitter", "telegram", "discord", "medium", "github", "reddit"];
+const SOCIAL_LABELS = {
+    twitter: "X",
+    telegram: "Telegram",
+    discord: "Discord",
+    medium: "Medium",
+    github: "GitHub",
+    reddit: "Reddit",
+};
+function normalizeSocialType(type) {
+    const normalized = (type || "").toLowerCase();
+    return normalized === "x" ? "twitter" : normalized;
+}
+function extractSocialLinks(pair) {
+    const socials = pair.info?.socials ?? [];
+    const websites = pair.info?.websites ?? [];
+    const byType = new Map();
+    socials.forEach((social) => {
+        const type = normalizeSocialType(social.type);
+        if (!type || !social.url) {
+            return;
+        }
+        if (!byType.has(type)) {
+            byType.set(type, social.url);
+        }
+    });
+    const ordered = [];
+    SOCIAL_PRIORITY.forEach((type) => {
+        const url = byType.get(type);
+        if (!url) {
+            return;
+        }
+        ordered.push({ label: SOCIAL_LABELS[type] || type, url });
+        byType.delete(type);
+    });
+    byType.forEach((url, type) => {
+        ordered.push({ label: SOCIAL_LABELS[type] || type, url });
+    });
+    const websiteUrl = websites.find((site) => Boolean(site?.url))?.url;
+    if (websiteUrl) {
+        ordered.push({ label: "Website", url: websiteUrl });
+    }
+    return ordered.slice(0, 4);
+}
 class AutopostService {
     watcher;
     intervalId = null;
@@ -58,6 +102,9 @@ class AutopostService {
         const buySellRatio = pair.txns?.m5?.sells
             ? (pair.txns.m5.buys / pair.txns.m5.sells).toFixed(2)
             : "∞";
+        const socialLinks = extractSocialLinks(pair)
+            .map((social) => `[${social.label}](${social.url})`)
+            .join(" • ");
         const lines = [
             `🎓 **$${graduation.symbol}** just graduated from PumpFun`,
             ``,
@@ -68,7 +115,8 @@ class AutopostService {
             `**MCap:** $${(pair.marketCap || 0).toLocaleString()}`,
             `**Buys/Sells 5m:** ${pair.txns?.m5?.buys || 0}/${pair.txns?.m5?.sells || 0} (${buySellRatio}x)`,
             ``,
-            `🔗 [DexScreener](${pair.url}) | \`${graduation.mint.slice(0, 8)}...${graduation.mint.slice(-4)}\``,
+            socialLinks ? `🔗 ${socialLinks}` : null,
+            `📊 [DexScreener](${pair.url}) | \`${graduation.mint.slice(0, 8)}...${graduation.mint.slice(-4)}\``,
         ];
         // Add risk warnings
         if ((pair.liquidity?.usd || 0) < 10000) {
@@ -77,7 +125,7 @@ class AutopostService {
         if (priceChange < -10) {
             lines.push(`⚠️ Price dropping`);
         }
-        return lines.join("\n");
+        return lines.filter(Boolean).join("\n");
     }
     async scanAndNotify() {
         const scanStart = new Date().toISOString();

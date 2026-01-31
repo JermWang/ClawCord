@@ -215,6 +215,11 @@ class InMemoryStorage {
         const logs = this.callLogs.get(guildId) || [];
         return logs.slice(0, limit);
     }
+    async getCallLogsSince(guildId, since, limit = 50) {
+        const logs = this.callLogs.get(guildId) || [];
+        const filtered = logs.filter((log) => log.createdAt >= since);
+        return filtered.slice(0, limit);
+    }
     async getAllGuilds() {
         return Array.from(this.guilds.values());
     }
@@ -326,6 +331,34 @@ class SupabaseStorage {
             .from("call_history")
             .select("*")
             .eq("guild_id", guildId)
+            .order("posted_at", { ascending: false })
+            .limit(limit);
+        if (error) {
+            console.error("Supabase call log lookup failed:", error);
+            return [];
+        }
+        return (data || []).map((row) => {
+            const entry = row;
+            return {
+                id: entry.call_id || entry.id,
+                guildId: entry.guild_id,
+                channelId: entry.channel_id || "",
+                callCard: entry.call_card || buildLegacyCallCard(entry),
+                triggeredBy: (entry.triggered_by || "manual"),
+                userId: entry.user_id || undefined,
+                messageId: entry.message_id || undefined,
+                createdAt: entry.posted_at ? parseDate(entry.posted_at) : new Date(),
+            };
+        });
+    }
+    async getCallLogsSince(guildId, since, limit = 50) {
+        if (!supabase)
+            return [];
+        const { data, error } = await supabase
+            .from("call_history")
+            .select("*")
+            .eq("guild_id", guildId)
+            .gte("posted_at", since.toISOString())
             .order("posted_at", { ascending: false })
             .limit(limit);
         if (error) {

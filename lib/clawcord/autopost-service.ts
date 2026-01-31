@@ -1,4 +1,4 @@
-import type { GraduationCandidate, GuildConfig, CallLog } from "./types";
+import type { GraduationCandidate, GuildConfig, CallLog, DexScreenerPair } from "./types";
 import { GraduationWatcher, DEFAULT_GRADUATION_FILTER } from "./dexscreener-provider";
 import { scoreToken } from "./scoring";
 import { generateCallCard } from "./call-card";
@@ -15,6 +15,63 @@ const DEFAULT_AUTOPOST_CONFIG: AutopostConfig = {
   intervalMs: 60_000, // 1 minute
   minScore: 6.5,
 };
+
+interface SocialLink {
+  label: string;
+  url: string;
+}
+
+const SOCIAL_PRIORITY = ["twitter", "telegram", "discord", "medium", "github", "reddit"];
+const SOCIAL_LABELS: Record<string, string> = {
+  twitter: "X",
+  telegram: "Telegram",
+  discord: "Discord",
+  medium: "Medium",
+  github: "GitHub",
+  reddit: "Reddit",
+};
+
+function normalizeSocialType(type?: string): string {
+  const normalized = (type || "").toLowerCase();
+  return normalized === "x" ? "twitter" : normalized;
+}
+
+function extractSocialLinks(pair: DexScreenerPair): SocialLink[] {
+  const socials = pair.info?.socials ?? [];
+  const websites = pair.info?.websites ?? [];
+  const byType = new Map<string, string>();
+
+  socials.forEach((social) => {
+    const type = normalizeSocialType(social.type);
+    if (!type || !social.url) {
+      return;
+    }
+    if (!byType.has(type)) {
+      byType.set(type, social.url);
+    }
+  });
+
+  const ordered: SocialLink[] = [];
+  SOCIAL_PRIORITY.forEach((type) => {
+    const url = byType.get(type);
+    if (!url) {
+      return;
+    }
+    ordered.push({ label: SOCIAL_LABELS[type] || type, url });
+    byType.delete(type);
+  });
+
+  byType.forEach((url, type) => {
+    ordered.push({ label: SOCIAL_LABELS[type] || type, url });
+  });
+
+  const websiteUrl = websites.find((site) => Boolean(site?.url))?.url;
+  if (websiteUrl) {
+    ordered.push({ label: "Website", url: websiteUrl });
+  }
+
+  return ordered.slice(0, 4);
+}
 
 export class AutopostService {
   private watcher: GraduationWatcher;
@@ -70,6 +127,9 @@ export class AutopostService {
     const buySellRatio = pair.txns?.m5?.sells 
       ? (pair.txns.m5.buys / pair.txns.m5.sells).toFixed(2) 
       : "∞";
+    const socialLinks = extractSocialLinks(pair)
+      .map((social) => `[${social.label}](${social.url})`)
+      .join(" • ");
 
     const lines = [
       `🎓 **$${graduation.symbol}** just graduated from PumpFun`,
@@ -81,7 +141,8 @@ export class AutopostService {
       `**MCap:** $${(pair.marketCap || 0).toLocaleString()}`,
       `**Buys/Sells 5m:** ${pair.txns?.m5?.buys || 0}/${pair.txns?.m5?.sells || 0} (${buySellRatio}x)`,
       ``,
-      `🔗 [DexScreener](${pair.url}) | \`${graduation.mint.slice(0, 8)}...${graduation.mint.slice(-4)}\``,
+      socialLinks ? `🔗 ${socialLinks}` : null,
+      `📊 [DexScreener](${pair.url}) | \`${graduation.mint.slice(0, 8)}...${graduation.mint.slice(-4)}\``,
     ];
 
     // Add risk warnings
@@ -92,7 +153,7 @@ export class AutopostService {
       lines.push(`⚠️ Price dropping`);
     }
 
-    return lines.join("\n");
+    return lines.filter(Boolean).join("\n");
   }
 
   async scanAndNotify(): Promise<{ sent: number; candidates: number }> {

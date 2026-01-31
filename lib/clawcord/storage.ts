@@ -33,6 +33,7 @@ export interface Storage {
   deleteGuildConfig(guildId: string): Promise<void>;
   addCallLog(guildId: string, log: CallLog | (CallCard & Partial<CallLog>)): Promise<void>;
   getCallLogs(guildId: string, limit?: number): Promise<CallLog[]>;
+  getCallLogsSince(guildId: string, since: Date, limit?: number): Promise<CallLog[]>;
   getAllGuilds(): Promise<GuildConfig[]>;
   getStats(): Promise<StorageStats>;
 }
@@ -299,6 +300,12 @@ class InMemoryStorage implements Storage {
     return logs.slice(0, limit);
   }
 
+  async getCallLogsSince(guildId: string, since: Date, limit: number = 50): Promise<CallLog[]> {
+    const logs = this.callLogs.get(guildId) || [];
+    const filtered = logs.filter((log) => log.createdAt >= since);
+    return filtered.slice(0, limit);
+  }
+
   async getAllGuilds(): Promise<GuildConfig[]> {
     return Array.from(this.guilds.values());
   }
@@ -428,6 +435,37 @@ class SupabaseStorage implements Storage {
       .from("call_history")
       .select("*")
       .eq("guild_id", guildId)
+      .order("posted_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("Supabase call log lookup failed:", error);
+      return [];
+    }
+
+    return (data || []).map((row) => {
+      const entry = row as CallHistoryRow;
+      return {
+        id: entry.call_id || entry.id,
+        guildId: entry.guild_id,
+        channelId: entry.channel_id || "",
+        callCard: entry.call_card || buildLegacyCallCard(entry),
+        triggeredBy: (entry.triggered_by || "manual") as CallLog["triggeredBy"],
+        userId: entry.user_id || undefined,
+        messageId: entry.message_id || undefined,
+        createdAt: entry.posted_at ? parseDate(entry.posted_at) : new Date(),
+      };
+    });
+  }
+
+  async getCallLogsSince(guildId: string, since: Date, limit: number = 50): Promise<CallLog[]> {
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from("call_history")
+      .select("*")
+      .eq("guild_id", guildId)
+      .gte("posted_at", since.toISOString())
       .order("posted_at", { ascending: false })
       .limit(limit);
 

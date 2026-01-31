@@ -4,6 +4,7 @@ const discord_js_1 = require("discord.js");
 const policies_1 = require("../lib/clawcord/policies");
 const storage_1 = require("../lib/clawcord/storage");
 const autopost_service_1 = require("../lib/clawcord/autopost-service");
+const dexscreener_provider_1 = require("../lib/clawcord/dexscreener-provider");
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_APPLICATION_ID = process.env.DISCORD_APPLICATION_ID;
 if (!DISCORD_BOT_TOKEN) {
@@ -29,6 +30,29 @@ const commands = [
                 name: 'scan',
                 description: 'Scan for new PumpFun graduations',
                 type: 1,
+                options: [
+                    {
+                        name: 'window',
+                        description: 'Time window to scan',
+                        type: 3,
+                        required: false,
+                        choices: [
+                            { name: 'Last 1 hour', value: '1h' },
+                            { name: 'Last 8 hours', value: '8h' },
+                            { name: 'Last 24 hours', value: '24h' },
+                        ],
+                    },
+                    {
+                        name: 'source',
+                        description: 'Show live scans or posted calls',
+                        type: 3,
+                        required: false,
+                        choices: [
+                            { name: 'Live scans', value: 'live' },
+                            { name: 'Posted calls', value: 'posted' },
+                        ],
+                    },
+                ],
             },
             {
                 name: 'policy',
@@ -194,28 +218,62 @@ async function registerCommands() {
         console.error('❌ Failed to register commands:', error);
     }
 }
-async function scanGraduations() {
-    try {
-        // Use DexScreener search for recent PumpFun graduated tokens (Raydium pairs)
-        const response = await fetch('https://api.dexscreener.com/latest/dex/search?q=pump');
-        const data = await response.json();
-        if (!data.pairs || !Array.isArray(data.pairs)) {
-            return [];
+const SOCIAL_PRIORITY = ['twitter', 'telegram', 'discord', 'medium', 'github', 'reddit'];
+const SOCIAL_LABELS = {
+    twitter: 'X',
+    telegram: 'Telegram',
+    discord: 'Discord',
+    medium: 'Medium',
+    github: 'GitHub',
+    reddit: 'Reddit',
+};
+function normalizeSocialType(type) {
+    const normalized = (type || '').toLowerCase();
+    if (normalized === 'x') {
+        return 'twitter';
+    }
+    return normalized;
+}
+function extractSocialLinks(pair) {
+    const socials = pair.info?.socials ?? [];
+    const websites = pair.info?.websites ?? [];
+    const byType = new Map();
+    socials.forEach((social) => {
+        const type = normalizeSocialType(social.type);
+        if (!type || !social.url) {
+            return;
         }
-        const oneHourAgo = Date.now() - (60 * 60 * 1000);
-        // Filter for:
-        // 1. Solana chain
-        // 2. Raydium DEX (where PumpFun tokens graduate to)
-        // 3. Created within the last hour
-        // 4. Has liquidity
-        const recentGraduations = data.pairs
-            .filter((pair) => {
-            const isRecentEnough = pair.pairCreatedAt && pair.pairCreatedAt >= oneHourAgo;
-            const isSolana = pair.chainId === 'solana';
-            const isRaydium = pair.dexId === 'raydium';
-            const hasLiquidity = (pair.liquidity?.usd || 0) > 5000;
-            return isRecentEnough && isSolana && isRaydium && hasLiquidity;
-        })
+        if (!byType.has(type)) {
+            byType.set(type, social.url);
+        }
+    });
+    const ordered = [];
+    SOCIAL_PRIORITY.forEach((type) => {
+        const url = byType.get(type);
+        if (!url) {
+            return;
+        }
+        ordered.push({ label: SOCIAL_LABELS[type] || type, url });
+        byType.delete(type);
+    });
+    byType.forEach((url, type) => {
+        ordered.push({ label: SOCIAL_LABELS[type] || type, url });
+    });
+    const websiteUrl = websites.find((site) => Boolean(site?.url))?.url;
+    if (websiteUrl) {
+        ordered.push({ label: 'Website', url: websiteUrl });
+    }
+    return ordered.slice(0, 4);
+}
+const manualDexProvider = new dexscreener_provider_1.DexScreenerProvider();
+async function scanGraduations(windowMinutes = 60) {
+    try {
+        const limit = windowMinutes >= 1440 ? 250 : windowMinutes >= 480 ? 200 : 120;
+        const cutoff = Date.now() - windowMinutes * 60 * 1000;
+        const pairs = await manualDexProvider.getLatestPumpFunGraduations(limit);
+        return pairs
+            .filter((pair) => pair.pairCreatedAt && pair.pairCreatedAt >= cutoff)
+            .filter((pair) => (pair.liquidity?.usd || 0) > 5000)
             .map((pair) => ({
             tokenAddress: pair.baseToken?.address || '',
             symbol: pair.baseToken?.symbol || 'UNKNOWN',
@@ -227,10 +285,17 @@ async function scanGraduations() {
             pairCreatedAt: pair.pairCreatedAt || 0,
             url: pair.url || `https://dexscreener.com/solana/${pair.baseToken?.address}`,
             ageMinutes: Math.floor((Date.now() - (pair.pairCreatedAt || 0)) / 60000),
+            socials: extractSocialLinks(pair),
         }))
-            .sort((a, b) => b.pairCreatedAt - a.pairCreatedAt)
+            .sort((a, b) => {
+            const aHasSocials = a.socials.length > 0 ? 1 : 0;
+            const bHasSocials = b.socials.length > 0 ? 1 : 0;
+            if (aHasSocials !== bHasSocials) {
+                return bHasSocials - aHasSocials;
+            }
+            return b.pairCreatedAt - a.pairCreatedAt;
+        })
             .slice(0, 10);
-        return recentGraduations;
     }
     catch (error) {
         console.error('Scan error:', error);
@@ -255,9 +320,63 @@ client.on(discord_js_1.Events.InteractionCreate, async (interaction) => {
         if (subcommand === 'scan') {
             await interaction.deferReply();
             try {
-                const graduations = await scanGraduations();
+                const window = interaction.options.getString('window') || '1h';
+                const source = interaction.options.getString('source') || 'live';
+                const windowMinutes = window === '24h' ? 1440 : window === '8h' ? 480 : 60;
+                const windowLabel = window === '1h' ? 'last hour' : `last ${windowMinutes / 60} hours`;
+                if (source === 'posted') {
+                    if (!interaction.guildId) {
+                        await interaction.editReply('❌ Posted call history is only available in a server.');
+                        return;
+                    }
+                    const storage = (0, storage_1.getStorage)();
+                    const since = new Date(Date.now() - windowMinutes * 60 * 1000);
+                    const logs = await storage.getCallLogsSince(interaction.guildId, since, 25);
+                    if (logs.length === 0) {
+                        await interaction.editReply(`📭 No calls posted in the ${windowLabel}.`);
+                        return;
+                    }
+                    const messages = logs.slice(0, 10).map((log, i) => {
+                        const card = log.callCard;
+                        const symbol = card?.token?.symbol || 'UNKNOWN';
+                        const mint = card?.token?.mint || '';
+                        const confidence = card?.confidence ?? 0;
+                        const liquidity = card?.metrics?.liquidity ?? 0;
+                        const liqFormatted = liquidity >= 1000000
+                            ? `$${(liquidity / 1000000).toFixed(2)}M`
+                            : `$${(liquidity / 1000).toFixed(0)}K`;
+                        const ageMinutes = Math.max(0, Math.floor((Date.now() - log.createdAt.getTime()) / 60000));
+                        const ageLabel = ageMinutes >= 60
+                            ? `${Math.floor(ageMinutes / 60)}h`
+                            : `${ageMinutes}m`;
+                        const sourceLabel = log.triggeredBy === 'auto'
+                            ? 'auto'
+                            : log.triggeredBy === 'mention'
+                                ? 'mention'
+                                : 'manual';
+                        const dexUrl = mint ? `https://dexscreener.com/solana/${mint}` : '';
+                        return [
+                            `**${i + 1}. $${symbol}** — ${ageLabel} ago (${sourceLabel})`,
+                            `   ⭐ Score: ${confidence.toFixed(1)} | 💧 Liq: ${liqFormatted}`,
+                            dexUrl ? `   📊 [DexScreener](${dexUrl}) | \`${mint.slice(0, 6)}...${mint.slice(-4)}\`` : null,
+                        ]
+                            .filter(Boolean)
+                            .join('\n');
+                    });
+                    await interaction.editReply({
+                        content: [
+                            `📌 **Posted Calls** (${windowLabel})`,
+                            '',
+                            messages.join('\n\n'),
+                            '',
+                            `_Found ${logs.length} posted call${logs.length !== 1 ? 's' : ''} in the ${windowLabel}_`,
+                        ].join('\n'),
+                    });
+                    return;
+                }
+                const graduations = await scanGraduations(windowMinutes);
                 if (graduations.length === 0) {
-                    await interaction.editReply('📭 No graduations found in the last hour.');
+                    await interaction.editReply(`📭 No graduations found in the ${windowLabel}.`);
                     return;
                 }
                 const top5 = graduations.slice(0, 5);
@@ -266,19 +385,25 @@ client.on(discord_js_1.Events.InteractionCreate, async (interaction) => {
                         ? `$${(g.marketCap / 1000000).toFixed(2)}M`
                         : `$${(g.marketCap / 1000).toFixed(0)}K`;
                     const liqFormatted = `$${(g.liquidity / 1000).toFixed(0)}K`;
+                    const socialLinks = g.socials
+                        .map((social) => `[${social.label}](${social.url})`)
+                        .join(' • ');
                     return [
                         `**${i + 1}. $${g.symbol}** — ${g.ageMinutes}m ago`,
                         `   💰 MCap: ${mcapFormatted} | 💧 Liq: ${liqFormatted}`,
-                        `   🔗 [DexScreener](${g.url}) | \`${g.tokenAddress.slice(0, 6)}...${g.tokenAddress.slice(-4)}\``,
-                    ].join('\n');
+                        socialLinks ? `   🔗 ${socialLinks}` : null,
+                        `   📊 [DexScreener](${g.url}) | \`${g.tokenAddress.slice(0, 6)}...${g.tokenAddress.slice(-4)}\``,
+                    ]
+                        .filter(Boolean)
+                        .join('\n');
                 });
                 await interaction.editReply({
                     content: [
-                        `🎓 **Recent Graduations** (last hour)`,
+                        `🎓 **Recent Graduations** (${windowLabel})`,
                         '',
                         messages.join('\n\n'),
                         '',
-                        `_Found ${graduations.length} graduation${graduations.length !== 1 ? 's' : ''} in the last hour_`,
+                        `_Found ${graduations.length} graduation${graduations.length !== 1 ? 's' : ''} in the ${windowLabel}_`,
                     ].join('\n'),
                 });
             }
@@ -320,6 +445,7 @@ client.on(discord_js_1.Events.InteractionCreate, async (interaction) => {
                     '`/settings display` — Configure call display options',
                     '',
                     '`/setchannel` — Set the channel for call alerts',
+                    'Reminder: Move the ClawCord bot role above public roles so it can post.',
                     '',
                     '**Links:**',
                     '• Website: https://clawcord.xyz',
