@@ -150,12 +150,62 @@ async function registerCommands() {
   }
 }
 
-async function scanGraduations(): Promise<any[]> {
+interface GraduationResult {
+  tokenAddress: string;
+  symbol: string;
+  name: string;
+  priceUsd: string;
+  marketCap: number;
+  liquidity: number;
+  volume24h: number;
+  pairCreatedAt: number;
+  url: string;
+  ageMinutes: number;
+}
+
+async function scanGraduations(): Promise<GraduationResult[]> {
   try {
-    const response = await fetch('https://api.dexscreener.com/token-profiles/latest/v1?chainId=solana');
-    const data = await response.json() as any[];
-    return Array.isArray(data) ? data.slice(0, 10) : [];
-  } catch {
+    // Use DexScreener search for recent PumpFun graduated tokens (Raydium pairs)
+    const response = await fetch('https://api.dexscreener.com/latest/dex/search?q=pump');
+    const data = await response.json() as any;
+    
+    if (!data.pairs || !Array.isArray(data.pairs)) {
+      return [];
+    }
+
+    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+    
+    // Filter for:
+    // 1. Solana chain
+    // 2. Raydium DEX (where PumpFun tokens graduate to)
+    // 3. Created within the last hour
+    // 4. Has liquidity
+    const recentGraduations = data.pairs
+      .filter((pair: any) => {
+        const isRecentEnough = pair.pairCreatedAt && pair.pairCreatedAt >= oneHourAgo;
+        const isSolana = pair.chainId === 'solana';
+        const isRaydium = pair.dexId === 'raydium';
+        const hasLiquidity = (pair.liquidity?.usd || 0) > 5000;
+        return isRecentEnough && isSolana && isRaydium && hasLiquidity;
+      })
+      .map((pair: any) => ({
+        tokenAddress: pair.baseToken?.address || '',
+        symbol: pair.baseToken?.symbol || 'UNKNOWN',
+        name: pair.baseToken?.name || 'Unknown Token',
+        priceUsd: pair.priceUsd || '0',
+        marketCap: pair.marketCap || 0,
+        liquidity: pair.liquidity?.usd || 0,
+        volume24h: pair.volume?.h24 || 0,
+        pairCreatedAt: pair.pairCreatedAt || 0,
+        url: pair.url || `https://dexscreener.com/solana/${pair.baseToken?.address}`,
+        ageMinutes: Math.floor((Date.now() - (pair.pairCreatedAt || 0)) / 60000),
+      }))
+      .sort((a: GraduationResult, b: GraduationResult) => b.pairCreatedAt - a.pairCreatedAt)
+      .slice(0, 10);
+
+    return recentGraduations;
+  } catch (error) {
+    console.error('Scan error:', error);
     return [];
   }
 }
@@ -182,20 +232,32 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const graduations = await scanGraduations();
         
         if (graduations.length === 0) {
-          await interaction.editReply('📭 No new graduations found.');
+          await interaction.editReply('📭 No graduations found in the last hour.');
           return;
         }
         
-        const top3 = graduations.slice(0, 3);
-        const messages = top3.map((g: any, i: number) => {
+        const top5 = graduations.slice(0, 5);
+        const messages = top5.map((g, i) => {
+          const mcapFormatted = g.marketCap >= 1000000 
+            ? `$${(g.marketCap / 1000000).toFixed(2)}M` 
+            : `$${(g.marketCap / 1000).toFixed(0)}K`;
+          const liqFormatted = `$${(g.liquidity / 1000).toFixed(0)}K`;
+          
           return [
-            `**${i + 1}. ${g.tokenAddress?.slice(0, 8)}...**`,
-            `   � [View Token](https://dexscreener.com/solana/${g.tokenAddress})`,
+            `**${i + 1}. $${g.symbol}** — ${g.ageMinutes}m ago`,
+            `   💰 MCap: ${mcapFormatted} | 💧 Liq: ${liqFormatted}`,
+            `   🔗 [DexScreener](${g.url}) | \`${g.tokenAddress.slice(0, 6)}...${g.tokenAddress.slice(-4)}\``,
           ].join('\n');
         });
         
         await interaction.editReply({
-          content: `🎓 **Latest Tokens**\n\n${messages.join('\n\n')}`,
+          content: [
+            `🎓 **Recent Graduations** (last hour)`,
+            '',
+            messages.join('\n\n'),
+            '',
+            `_Found ${graduations.length} graduation${graduations.length !== 1 ? 's' : ''} in the last hour_`,
+          ].join('\n'),
         });
       } catch (error) {
         console.error('Scan error:', error);
