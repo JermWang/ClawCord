@@ -40,7 +40,7 @@ export class DexScreenerProvider {
         throw new Error(`DexScreener API error: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { pairs?: DexScreenerPair[] };
       const pairs: DexScreenerPair[] = data.pairs || [];
 
       // Filter for Raydium pairs (PumpFun graduates here)
@@ -72,7 +72,7 @@ export class DexScreenerProvider {
         return null;
       }
 
-      const data = await response.json();
+      const data = await response.json() as { pairs?: DexScreenerPair[] };
       const pairs: DexScreenerPair[] = data.pairs || [];
 
       // Return the most liquid Raydium pair
@@ -103,7 +103,7 @@ export class DexScreenerProvider {
         return [];
       }
 
-      const data = await response.json();
+      const data = await response.json() as { pairs?: DexScreenerPair[] };
       const pairs: DexScreenerPair[] = data.pairs || [];
 
       return pairs.filter(

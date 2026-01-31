@@ -162,7 +162,7 @@ export class HeliusProvider {
         throw new Error(`Helius RPC error: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { result?: { total?: number } };
       const holderCount = data.result?.total || 0;
       
       this.setCache(cacheKey, holderCount);
@@ -204,7 +204,7 @@ export class HeliusProvider {
         throw new Error(`Helius RPC error: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { result?: { token_accounts?: Array<{ owner: string; amount: number }> } };
       const accounts = data.result?.token_accounts || [];
       
       // Calculate total supply from accounts
@@ -251,7 +251,7 @@ export class HeliusProvider {
         throw new Error(`Helius API error: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as Array<{ onChainMetadata?: { metadata?: { name?: string; symbol?: string } }; onChainAccountInfo?: { decimals?: number; supply?: number } }>;
       const token = data[0];
       
       return token ? {

@@ -1,0 +1,46 @@
+services:
+  # Discord Bot - Background Worker (always running)
+  - type: worker
+    name: clawcord-bot
+    runtime: node
+    buildCommand: npm install && npm run bot:build
+    startCommand: npm run bot:start
+    envVars:
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_APPLICATION_ID
+        sync: false
+      - key: DISCORD_PUBLIC_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: HELIUS_API_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production
+
+  # Next.js Web App (optional - for dashboard/website)
+  - type: web
+    name: clawcord-web
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_APPLICATION_ID
+        sync: false
+      - key: DISCORD_PUBLIC_KEY
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: NODE_ENV
+        value: production

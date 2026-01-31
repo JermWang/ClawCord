@@ -9,7 +9,7 @@
     "start": "next start",
     "bot": "npx tsx bot/index.ts",
     "bot:build": "tsc -p bot/tsconfig.json",
-    "bot:start": "node bot/dist/bot/index.js"
+    "bot:start": "node dist/bot/index.js"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",

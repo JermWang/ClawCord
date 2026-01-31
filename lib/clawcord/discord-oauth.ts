@@ -104,7 +104,14 @@ export async function exchangeCodeForToken(
     throw new Error(`Failed to exchange code: ${error}`);
   }
 
-  return response.json();
+  return response.json() as Promise<{
+    access_token: string;
+    token_type: string;
+    expires_in: number;
+    refresh_token: string;
+    scope: string;
+    guild?: { id: string; name: string };
+  }>;
 }
 
 export async function getGuildInfo(
@@ -127,7 +134,13 @@ export async function getGuildInfo(
     throw new Error(`Failed to get guild info: ${response.status}`);
   }
 
-  return response.json();
+  return response.json() as Promise<{
+    id: string;
+    name: string;
+    icon: string | null;
+    owner_id: string;
+    member_count?: number;
+  }>;
 }
 
 export async function getGuildChannels(
@@ -149,7 +162,7 @@ export async function getGuildChannels(
     throw new Error(`Failed to get guild channels: ${response.status}`);
   }
 
-  const channels = await response.json();
+  const channels = await response.json() as Array<{ id: string; name: string; type: number; position: number }>;
   // Filter to text channels (type 0) and sort by position
   return channels
     .filter((c: { type: number }) => c.type === 0)
