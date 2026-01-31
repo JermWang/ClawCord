@@ -37,7 +37,12 @@ export class DexScreenerProvider {
       );
 
       if (!response.ok) {
-        throw new Error(`DexScreener API error: ${response.status}`);
+        console.warn(
+          `DexScreener pairs endpoint failed (${response.status}). Falling back to search.`
+        );
+        const fallbackPairs = await this.searchTokens("raydium");
+        this.cache.set(cacheKey, { data: fallbackPairs, timestamp: Date.now() });
+        return fallbackPairs;
       }
 
       const data = await response.json() as { pairs?: DexScreenerPair[] };
@@ -45,7 +50,7 @@ export class DexScreenerProvider {
 
       // Filter for Raydium pairs (PumpFun graduates here)
       const raydiumPairs = pairs.filter(
-        (pair: DexScreenerPair) => pair.dexId === "raydium"
+        (pair: DexScreenerPair) => pair.dexId === "raydium" && pair.chainId === "solana"
       );
 
       this.cache.set(cacheKey, { data: raydiumPairs, timestamp: Date.now() });
