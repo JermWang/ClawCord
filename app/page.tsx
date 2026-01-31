@@ -85,17 +85,19 @@ export default function ClawCordLanding() {
 
       {/* ===== HERO SECTION ===== */}
       <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
-        {/* ASCII Shader Background - Shimmer wave effect */}
+        {/* ASCII Shader Background - Smooth shimmer with glow */}
         <div className="absolute inset-0 z-0">
           <AsciiShader
             mode="shimmer"
-            color="#6b2020"
-            bgColor="#1a1a1a"
-            density={1.2}
-            speed={0.8}
-            charRamp=" .:;+*#%@"
+            color="#ff4444"
+            bgColor="#0f0f0f"
+            density={1.0}
+            speed={0.6}
+            charRamp=" .·:;+*#%@"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#1a1a1a]/30 via-transparent to-[#1a1a1a]" />
+          {/* Glow overlay for bloom effect */}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-red-900/5 to-[#1a1a1a]" />
+          <div className="absolute inset-0 bg-[#1a1a1a]/20" style={{ mixBlendMode: 'overlay' }} />
         </div>
 
         {/* Hero Content */}

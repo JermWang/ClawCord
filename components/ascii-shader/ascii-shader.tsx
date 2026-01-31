@@ -172,29 +172,33 @@ const shaderFields: Record<ShaderMode, FieldFunction> = {
   },
 
   shimmer: (x, y, t, seed) => {
-    // Horizontal wave shimmer effect sweeping across the screen
-    const waveSpeed = t * 1.5;
-    const waveFreq = 2.5;
-    const shimmerWidth = 0.4;
+    // Smooth flowing wave shimmer with glow/bloom effect
+    const waveSpeed = t * 0.8; // Slower for smoother movement
     
-    // Multiple overlapping waves at different speeds
-    const wave1 = fastSin(x * waveFreq + waveSpeed + seed);
-    const wave2 = fastSin(x * waveFreq * 1.3 + waveSpeed * 0.7 + seed * 0.5);
-    const wave3 = fastSin(x * waveFreq * 0.7 + waveSpeed * 1.2 + y * 0.5 + seed * 0.3);
+    // Primary flowing waves - smoother frequencies
+    const wave1 = fastSin(x * 1.8 + waveSpeed + seed);
+    const wave2 = fastSin(x * 2.2 + waveSpeed * 0.6 + y * 0.3 + seed * 0.5);
+    const wave3 = fastSin(x * 1.4 + waveSpeed * 1.1 + y * 0.2 + seed * 0.3);
     
-    // Subtle vertical variation
-    const yVar = fastSin(y * 3 + t * 0.3) * 0.15;
+    // Soft vertical flow
+    const yFlow = fastSin(y * 1.5 + t * 0.4) * 0.2;
     
-    // Combine waves with brightness peaks
-    const combined = (wave1 + wave2 * 0.6 + wave3 * 0.4) / 2;
+    // Combine waves smoothly
+    const combined = (wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2);
     
-    // Create shimmer highlights
-    const highlight = Math.pow(Math.max(0, combined), 2) * 0.8;
+    // Smooth bloom/glow effect using softer power curve
+    const glow = Math.pow((combined + 1) * 0.5, 1.5);
     
-    // Base ambient glow
-    const ambient = 0.15 + fastSin(x * 1.5 + y * 1.5 + t * 0.5) * 0.08;
+    // Secondary shimmer pulse for vibrancy
+    const pulse = fastSin(x * 3 + y * 2 + t * 2) * 0.1;
     
-    return Math.min(1, ambient + highlight + yVar);
+    // Bright ambient base with soft variation
+    const ambient = 0.25 + fastSin(t * 0.3) * 0.05;
+    
+    // Bloom highlights - brighter peaks
+    const bloom = Math.pow(Math.max(0, glow - 0.3), 2) * 1.2;
+    
+    return Math.min(1, ambient + glow * 0.4 + bloom + yFlow + pulse);
   },
 };
 
