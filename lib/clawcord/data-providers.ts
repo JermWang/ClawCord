@@ -109,28 +109,172 @@ export class BirdeyeProvider {
 export class HeliusProvider {
   private apiKey: string;
   private baseUrl: string;
+  private rpcUrl: string;
+  private cache: Map<string, { data: unknown; timestamp: number }> = new Map();
+  private cacheTTL = 60_000; // 1 minute cache
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
+  constructor(apiKey?: string) {
+    this.apiKey = apiKey || process.env.HELIUS_API_KEY || "";
     this.baseUrl = `https://api.helius.xyz/v0`;
+    this.rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${this.apiKey}`;
   }
 
-  async getTokenHolders(mint: string) {
-    const response = await fetch(
-      `${this.baseUrl}/token-metadata?api-key=${this.apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mintAccounts: [mint] }),
-      }
-    );
+  private getCached<T>(key: string): T | null {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+      return cached.data as T;
+    }
+    return null;
+  }
 
-    if (!response.ok) {
-      throw new Error(`Helius API error: ${response.status}`);
+  private setCache(key: string, data: unknown): void {
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  async getTokenHolderCount(mint: string): Promise<number> {
+    if (!this.apiKey) {
+      console.warn("Helius API key not configured");
+      return 0;
     }
 
-    return response.json();
+    const cacheKey = `holders-${mint}`;
+    const cached = this.getCached<number>(cacheKey);
+    if (cached !== null) return cached;
+
+    try {
+      // Use DAS API to get token info including holder count
+      const response = await fetch(this.rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "holder-count",
+          method: "getTokenAccounts",
+          params: {
+            mint,
+            limit: 1,
+            showZeroBalance: false,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Helius RPC error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const holderCount = data.result?.total || 0;
+      
+      this.setCache(cacheKey, holderCount);
+      return holderCount;
+    } catch (error) {
+      console.error(`Failed to fetch holder count for ${mint}:`, error);
+      return 0;
+    }
   }
+
+  async getTopHolders(mint: string, limit = 10): Promise<Array<{
+    owner: string;
+    amount: number;
+    percentage: number;
+  }>> {
+    if (!this.apiKey) return [];
+
+    const cacheKey = `top-holders-${mint}-${limit}`;
+    const cached = this.getCached<Array<{ owner: string; amount: number; percentage: number }>>(cacheKey);
+    if (cached !== null) return cached;
+
+    try {
+      const response = await fetch(this.rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "top-holders",
+          method: "getTokenAccounts",
+          params: {
+            mint,
+            limit,
+            showZeroBalance: false,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Helius RPC error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const accounts = data.result?.token_accounts || [];
+      
+      // Calculate total supply from accounts
+      const totalAmount = accounts.reduce((sum: number, acc: { amount: number }) => sum + (acc.amount || 0), 0);
+      
+      const holders = accounts.map((acc: { owner: string; amount: number }) => ({
+        owner: acc.owner,
+        amount: acc.amount || 0,
+        percentage: totalAmount > 0 ? ((acc.amount || 0) / totalAmount) * 100 : 0,
+      }));
+
+      this.setCache(cacheKey, holders);
+      return holders;
+    } catch (error) {
+      console.error(`Failed to fetch top holders for ${mint}:`, error);
+      return [];
+    }
+  }
+
+  async getTopHolderConcentration(mint: string, topN = 10): Promise<number> {
+    const holders = await this.getTopHolders(mint, topN);
+    return holders.reduce((sum, h) => sum + h.percentage, 0);
+  }
+
+  async getTokenMetadata(mint: string): Promise<{
+    name?: string;
+    symbol?: string;
+    decimals?: number;
+    supply?: number;
+  } | null> {
+    if (!this.apiKey) return null;
+
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/token-metadata?api-key=${this.apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mintAccounts: [mint] }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Helius API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const token = data[0];
+      
+      return token ? {
+        name: token.onChainMetadata?.metadata?.name,
+        symbol: token.onChainMetadata?.metadata?.symbol,
+        decimals: token.onChainAccountInfo?.decimals,
+        supply: token.onChainAccountInfo?.supply,
+      } : null;
+    } catch (error) {
+      console.error(`Failed to fetch token metadata for ${mint}:`, error);
+      return null;
+    }
+  }
+}
+
+// Singleton instance
+let heliusInstance: HeliusProvider | null = null;
+
+export function getHeliusProvider(): HeliusProvider {
+  if (!heliusInstance) {
+    heliusInstance = new HeliusProvider();
+  }
+  return heliusInstance;
 }
 
 // Factory function to create the appropriate provider

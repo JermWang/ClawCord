@@ -5,6 +5,7 @@ import type {
   GraduationCandidate,
   TokenMetrics,
 } from "./types";
+import { getHeliusProvider } from "./data-providers";
 
 const DEXSCREENER_API = process.env.DEXSCREENER_BASE_URL || "https://api.dexscreener.com";
 const PUMPFUN_PROGRAM_ID = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
@@ -159,6 +160,7 @@ export class GraduationWatcher {
   ): Promise<GraduationCandidate[]> {
     const pairs = await this.dexProvider.getLatestPumpFunGraduations(100);
     const candidates: GraduationCandidate[] = [];
+    const helius = getHeliusProvider();
 
     for (const pair of pairs) {
       // Skip if we've already seen this token
@@ -167,6 +169,20 @@ export class GraduationWatcher {
       }
 
       const metrics = this.dexProvider.pairToMetrics(pair);
+      
+      // Enrich metrics with Helius holder data
+      try {
+        const [holderCount, topHolderConcentration] = await Promise.all([
+          helius.getTokenHolderCount(pair.baseToken.address),
+          helius.getTopHolderConcentration(pair.baseToken.address, 10),
+        ]);
+        metrics.holders = holderCount;
+        metrics.topHolderConcentration = topHolderConcentration;
+      } catch (error) {
+        // Continue with default values if Helius fails
+        console.warn(`Failed to fetch Helius data for ${pair.baseToken.symbol}:`, error);
+      }
+
       const { passes, failures } = this.applyFilter(pair, metrics, filter);
 
       // Create graduation info
@@ -232,7 +248,19 @@ export class GraduationWatcher {
       );
     }
 
-    // Holders check would require additional API call to Helius
+    // Check holder count (now available via Helius)
+    if (metrics.holders > 0 && metrics.holders < filter.minHolders) {
+      failures.push(
+        `Holders ${metrics.holders} < ${filter.minHolders}`
+      );
+    }
+
+    // Check top holder concentration (whale risk)
+    if (metrics.topHolderConcentration > 50) {
+      failures.push(
+        `Top 10 holders own ${metrics.topHolderConcentration.toFixed(1)}% (high concentration)`
+      );
+    }
 
     return {
       passes: failures.length === 0,
@@ -274,6 +302,21 @@ export class GraduationWatcher {
     const mcap = pair.marketCap || 0;
     if (mcap > 100000 && mcap < 5000000) score += 0.5;
     else if (mcap > 10000000) score -= 0.5;
+
+    // Holder distribution (from Helius)
+    const holders = metrics.holders;
+    if (holders > 200) score += 1;
+    else if (holders > 100) score += 0.5;
+    else if (holders < 30 && holders > 0) score -= 0.5;
+
+    // Top holder concentration (lower is better)
+    const concentration = metrics.topHolderConcentration;
+    if (concentration > 0) {
+      if (concentration < 20) score += 1;
+      else if (concentration < 35) score += 0.5;
+      else if (concentration > 60) score -= 1;
+      else if (concentration > 45) score -= 0.5;
+    }
 
     return Math.max(0, Math.min(10, score));
   }

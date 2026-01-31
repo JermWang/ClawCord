@@ -18,6 +18,7 @@ export {
   SolanaDataProvider,
   BirdeyeProvider,
   HeliusProvider,
+  getHeliusProvider,
   createDataProvider,
 } from "./data-providers";
 
