@@ -369,6 +369,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           '`/settings display` — Configure call display options',
           '',
           '`/setchannel` — Set the channel for call alerts',
+          'Reminder: Move the ClawCord bot role above public roles so it can post.',
           '',
           '**Links:**',
           '• Website: https://clawcord.xyz',
