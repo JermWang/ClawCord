@@ -397,7 +397,9 @@ export default function ClawCordLanding() {
               </p>
               <div className="flex items-center gap-3">
                 <a
-                  href="https://twitter.com"
+                  href="https://x.com/ClawCordSOL"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-gray-400 hover:text-white hover:bg-white/20 transition-colors"
                   aria-label="Twitter"
                 >
