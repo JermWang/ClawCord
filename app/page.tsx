@@ -168,14 +168,12 @@ export default function ClawCordLanding() {
           href="https://openclaw.ai"
           target="_blank"
           rel="noopener noreferrer"
-          className="absolute bottom-6 left-6 z-20 flex items-center gap-2 opacity-50 hover:opacity-80 transition-opacity"
+          className="absolute bottom-6 left-6 z-20 flex items-center gap-2 opacity-60 hover:opacity-90 transition-opacity"
           initial={{ opacity: 0 }}
-          animate={{ opacity: 0.5 }}
+          animate={{ opacity: 0.6 }}
           transition={{ delay: 1, duration: 0.5 }}
         >
-          <div className="w-5 h-5 rounded bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center">
-            <span className="text-white text-xs font-bold">O</span>
-          </div>
+          <span className="text-lg">🦞</span>
           <span className="text-white/70 text-xs tracking-wide" style={{ fontFamily: "var(--font-figtree), Figtree" }}>
             Powered by <span className="font-medium text-white/90">OpenClaw AI</span>
           </span>
