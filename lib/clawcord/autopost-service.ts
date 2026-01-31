@@ -29,7 +29,7 @@ export class AutopostService {
   async sendDiscordMessage(channelId: string, content: string): Promise<boolean> {
     const token = process.env.DISCORD_BOT_TOKEN;
     if (!token) {
-      console.error("No Discord bot token configured");
+      console.error("❌ No Discord bot token configured - cannot send messages");
       return false;
     }
 
@@ -47,13 +47,19 @@ export class AutopostService {
       );
 
       if (!response.ok) {
-        console.error(`Discord API error: ${response.status}`);
+        const errorBody = await response.text();
+        console.error(`❌ Discord API error ${response.status}: ${errorBody}`);
+        if (response.status === 403) {
+          console.error(`   → Bot lacks permission to post in channel ${channelId}`);
+        } else if (response.status === 404) {
+          console.error(`   → Channel ${channelId} not found - may have been deleted`);
+        }
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error("Failed to send Discord message:", error);
+      console.error("❌ Failed to send Discord message:", error);
       return false;
     }
   }
@@ -90,25 +96,58 @@ export class AutopostService {
   }
 
   async scanAndNotify(): Promise<{ sent: number; candidates: number }> {
+    const scanStart = new Date().toISOString();
+    console.log(`\n🔍 [${scanStart}] Starting autopost scan cycle...`);
+    
     const storage = getStorage();
     const guilds = await storage.getAllGuilds();
+    console.log(`📋 Found ${guilds.length} total guilds in storage`);
     
     // Scan for new graduations
+    console.log(`🎓 Scanning for PumpFun graduations...`);
     const candidates = await this.watcher.scanForGraduations(DEFAULT_GRADUATION_FILTER);
+    console.log(`📊 Found ${candidates.length} graduation candidates`);
     
     // Filter to high-potential candidates
     const highPotential = candidates.filter(
       (c) => c.passesFilter && c.score >= this.config.minScore
     );
+    console.log(`✅ ${highPotential.length} candidates pass filters (minScore: ${this.config.minScore})`);
+    
+    if (highPotential.length > 0) {
+      console.log(`🏆 High potential tokens:`);
+      highPotential.forEach((c, i) => {
+        console.log(`   ${i + 1}. $${c.graduation.symbol} | Score: ${c.score.toFixed(1)} | MCap: $${(c.pair.marketCap || 0).toLocaleString()} | Liq: $${(c.pair.liquidity?.usd || 0).toLocaleString()}`);
+      });
+    }
 
     let sent = 0;
+    const autopostGuilds = guilds.filter(g => g.policy.autopostEnabled);
+    console.log(`\n📢 ${autopostGuilds.length} guilds have autopost ENABLED`);
+    
+    if (autopostGuilds.length === 0) {
+      console.log(`⚠️  No guilds have autopost enabled. Use /settings autopost enabled:true to enable.`);
+    }
 
     // Send to all subscribed guilds with autopost enabled
     for (const guild of guilds) {
-      if (!guild.policy.autopostEnabled) continue;
+      if (!guild.policy.autopostEnabled) {
+        continue;
+      }
+      
+      console.log(`\n🏠 Processing guild: ${guild.guildName} (${guild.guildId})`);
+      console.log(`   📍 Channel ID: ${guild.channelId || 'NOT SET'}`);
+      
+      if (!guild.channelId) {
+        console.log(`   ❌ Skipping - no channel configured. Use /setchannel to set one.`);
+        continue;
+      }
       
       // Check quiet hours
-      if (this.isQuietHours(guild)) continue;
+      if (this.isQuietHours(guild)) {
+        console.log(`   🌙 Skipping - quiet hours active`);
+        continue;
+      }
 
       // Check daily limit
       const today = new Date().toDateString();
@@ -117,14 +156,26 @@ export class AutopostService {
         (log: CallLog) => new Date(log.createdAt).toDateString() === today
       ).length;
       
-      if (callsToday >= guild.policy.maxCallsPerDay) continue;
+      console.log(`   📈 Calls today: ${callsToday}/${guild.policy.maxCallsPerDay}`);
+      
+      if (callsToday >= guild.policy.maxCallsPerDay) {
+        console.log(`   ⏸️  Skipping - daily limit reached`);
+        continue;
+      }
+
+      if (highPotential.length === 0) {
+        console.log(`   📭 No high-potential candidates to post`);
+        continue;
+      }
 
       for (const candidate of highPotential) {
+        console.log(`   📤 Sending call for $${candidate.graduation.symbol} to channel ${guild.channelId}...`);
         const message = this.formatGraduationCall(candidate);
         const success = await this.sendDiscordMessage(guild.channelId, message);
         
         if (success) {
           sent++;
+          console.log(`   ✅ Message sent successfully!`);
           // Log the call - use scoring to generate proper ScoringResult
           const scoringResult = scoreToken(candidate.metrics, guild.policy);
           const callCard = generateCallCard(
@@ -141,10 +192,15 @@ export class AutopostService {
             triggeredBy: "auto",
             createdAt: new Date(),
           });
+        } else {
+          console.log(`   ❌ Failed to send message - check bot permissions`);
         }
       }
     }
 
+    console.log(`\n📊 Scan complete: ${sent} messages sent for ${highPotential.length} candidates`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+    
     return { sent, candidates: highPotential.length };
   }
 
@@ -164,7 +220,15 @@ export class AutopostService {
   }
 
   start() {
-    if (this.intervalId) return;
+    if (this.intervalId) {
+      console.log('⚠️  Autopost service already running');
+      return;
+    }
+    
+    console.log('🚀 Starting Autopost Service...');
+    console.log(`   ⏱️  Scan interval: ${this.config.intervalMs / 1000}s`);
+    console.log(`   📊 Min score threshold: ${this.config.minScore}`);
+    console.log(`   🔑 Discord token: ${process.env.DISCORD_BOT_TOKEN ? 'SET' : 'MISSING'}`);
     
     this.config.enabled = true;
     this.intervalId = setInterval(
@@ -173,6 +237,7 @@ export class AutopostService {
     );
     
     // Run immediately
+    console.log('🔄 Running initial scan...');
     this.scanAndNotify();
   }
 
